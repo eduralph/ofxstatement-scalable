@@ -24,6 +24,7 @@ classifiers = [
 keywords = ["ofx", "banking", "statement", "plugin", "ofxstatement", "scalable", "scalable capital"]
 dependencies = [
   "ofxstatement",
+  "pdfplumber",
 ]
 
 [project.urls]
