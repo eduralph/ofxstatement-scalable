@@ -10,3 +10,7 @@ eggs
 .project
 .pydevproject
 *.sublime*
+.coverage
+.pytest_cache/
+__pycache__/
+*.csv
