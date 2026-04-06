@@ -23,12 +23,57 @@ import pytest
 
 from ofxstatement.exceptions import ParseError
 
-from ofxstatement_scalable.plugin import ScalablePlugin, ScalableParser, _parse_amount
+from ofxstatement_scalable.plugin import ScalablePlugin, ScalableParser, _parse_amount, _txn_type
 
 
 # ---------------------------------------------------------------------------
 # Unit tests for _parse_amount (English locale: comma = thousands, dot = decimal)
 # ---------------------------------------------------------------------------
+
+class TestTxnType:
+    def test_buy(self):
+        assert _txn_type("Buy of a financial instrument") == "DEBIT"
+
+    def test_sell(self):
+        assert _txn_type("Sell of a financial instrument") == "CREDIT"
+
+    def test_credit_transfer(self):
+        assert _txn_type("Credit transfer") == "XFER"
+
+    def test_direct_debit(self):
+        assert _txn_type("Direct debit") == "DIRECTDEBIT"
+
+    def test_withdrawal(self):
+        assert _txn_type("Withdrawal from cash account") == "XFER"
+
+    def test_received_interest(self):
+        assert _txn_type("Received interest") == "INT"
+
+    def test_trade_fee(self):
+        assert _txn_type("Trade fee") == "SRVCHG"
+
+    def test_vorabpauschale(self):
+        assert _txn_type("Vorabpauschale") == "DEBIT"
+
+    def test_case_insensitive(self):
+        assert _txn_type("BUY OF A FINANCIAL INSTRUMENT") == "DEBIT"
+
+    def test_unknown_returns_other(self):
+        assert _txn_type("Something entirely new") == "OTHER"
+
+    # German entries
+    def test_de_buy(self):
+        assert _txn_type("Kauf eines Finanzinstruments") == "DEBIT"
+
+    def test_de_withdrawal(self):
+        assert _txn_type("Abbuchung vom Cashkonto") == "XFER"
+
+    def test_de_direct_debit(self):
+        assert _txn_type("Lastschrift") == "DIRECTDEBIT"
+
+    def test_de_interest(self):
+        assert _txn_type("Zinsgutschrift") == "INT"
+
 
 class TestParseAmount:
     def test_zero(self):
@@ -186,13 +231,13 @@ class TestTransactionParsing:
         assert self.lines[3].amount == Decimal("-13864.86")
 
     def test_simple_debit_type(self):
-        assert self.lines[3].trntype == "DEBIT"
+        assert self.lines[3].trntype == "XFER"
 
     def test_credit_amount(self):
         assert self.lines[4].amount == Decimal("602.96")
 
     def test_credit_type(self):
-        assert self.lines[4].trntype == "CREDIT"
+        assert self.lines[4].trntype == "DIRECTDEBIT"
 
     def test_multiline_memo_includes_continuation(self):
         # First "Buy" entry: memo should include the instrument detail line
@@ -278,10 +323,10 @@ class TestGermanStatement:
         assert "IE000HY30YW6" in self.lines[0].memo
 
     def test_debit_type(self):
-        assert self.lines[1].trntype == "DEBIT"
+        assert self.lines[1].trntype == "XFER"  # Abbuchung vom Cashkonto
 
     def test_credit_type(self):
-        assert self.lines[2].trntype == "CREDIT"
+        assert self.lines[2].trntype == "DIRECTDEBIT"  # Lastschrift
 
 
 class TestDocumentTypeDetection:

@@ -20,10 +20,11 @@ Supports PDF statements issued in English and German.
 """
 
 import hashlib
+import logging
 import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional, Tuple
 
 import pdfplumber
 
@@ -93,6 +94,62 @@ _STRUCTURAL_RE = re.compile(
     r"|\d+ / \d+$"                       # page number
     r")"
 )
+
+
+# ---------------------------------------------------------------------------
+# Transaction type map
+#
+# Entries marked ★ are confirmed against real statements (2025–2026).
+# Entries marked ○ are best-effort additions for descriptions not yet
+# observed in available statements — see README caveats.
+#
+# Matching is case-insensitive prefix matching on the description field.
+# ---------------------------------------------------------------------------
+TXN_TYPE_MAP: List[Tuple[str, str]] = [
+    # ── Securities ─────────────────────────────────────────────────────────
+    ("Buy of a financial instrument", "DEBIT"),         # ★ ETF / fund purchase
+    ("Sell of a financial instrument", "CREDIT"),       # ○ ETF / fund sale
+    ("Kauf eines Finanzinstruments", "DEBIT"),          # ○ DE: purchase
+    ("Verkauf eines Finanzinstruments", "CREDIT"),      # ○ DE: sale
+    # ── Cash account movements ─────────────────────────────────────────────
+    ("Credit transfer", "XFER"),                        # ★ incoming bank transfer
+    ("Direct debit", "DIRECTDEBIT"),                    # ★ savings-plan SEPA pull
+    ("Withdrawal from cash account", "XFER"),           # ★ cash-out to linked bank
+    ("Deposit to cash account", "XFER"),                # ○ cash-in from linked bank
+    ("Überweisung", "XFER"),                            # ○ DE: bank transfer
+    ("Gutschrift", "XFER"),                             # ○ DE: incoming credit
+    ("Lastschrift", "DIRECTDEBIT"),                     # ○ DE: SEPA direct debit
+    ("Abbuchung", "XFER"),                              # ○ DE: debit / withdrawal
+    ("Auszahlung", "XFER"),                             # ○ DE: withdrawal
+    ("Einzahlung", "XFER"),                             # ○ DE: deposit
+    # ── Income ─────────────────────────────────────────────────────────────
+    ("Received interest", "INT"),                       # ★ PRIME+ / money-market interest
+    ("Dividend", "DIV"),                                # ○ dividend payment
+    ("Zinsgutschrift", "INT"),                          # ○ DE: interest credit
+    ("Zinsen", "INT"),                                  # ○ DE: interest
+    ("Dividende", "DIV"),                               # ○ DE: dividend
+    # ── Fees and taxes ─────────────────────────────────────────────────────
+    ("Trade fee", "SRVCHG"),                            # ★ per-trade brokerage fee
+    ("Vorabpauschale", "DEBIT"),                        # ★ DE advance lump-sum fund tax
+    ("Account fee", "SRVCHG"),                          # ○ account maintenance fee
+    ("Handelsgebühr", "SRVCHG"),                        # ○ DE: trading fee
+    ("Transaktionsgebühr", "SRVCHG"),                   # ○ DE: transaction fee
+    ("Kontoführungsgebühr", "SRVCHG"),                  # ○ DE: account fee
+]
+
+
+def _txn_type(description: str) -> str:
+    """Map a transaction description to an OFX transaction type.
+
+    Uses case-insensitive prefix matching against TXN_TYPE_MAP.
+    Logs an info message and returns 'OTHER' for unknown descriptions.
+    """
+    lower = description.lower()
+    for prefix, ttype in TXN_TYPE_MAP:
+        if lower.startswith(prefix.lower()):
+            return ttype
+    logging.getLogger(__name__).info("Unknown transaction type: %r", description)
+    return "OTHER"
 
 
 def _parse_amount(s: str) -> Decimal:
@@ -227,7 +284,7 @@ class ScalableParser(StatementParser[str]):
         line.date_user = value_date
         line.memo = memo
         line.amount = amount
-        line.trntype = "CREDIT" if amount >= 0 else "DEBIT"
+        line.trntype = _txn_type(t["description"])
         line.id = hashlib.md5(
             f"{t['booking']}{t['value']}{t['description']}"
             f"{t['amount_str']}{'|'.join(t['continuation'])}".encode()
