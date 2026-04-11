@@ -272,9 +272,11 @@ class TestEmptyStatement:
         # Remove the transaction lines
         lines = text.split("\n")
         cleaned = [
-            l
-            for l in lines
-            if not (_is_tx_line(l) or l.strip().startswith(("6.25", "0.67", "0.24")))
+            line
+            for line in lines
+            if not (
+                _is_tx_line(line) or line.strip().startswith(("6.25", "0.67", "0.24"))
+            )
         ]
         parser = _make_parser("\n".join(cleaned))
         assert parser.statement.lines == []
