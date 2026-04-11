@@ -23,12 +23,62 @@ import pytest
 
 from ofxstatement.exceptions import ParseError
 
-from ofxstatement_scalable.plugin import ScalablePlugin, ScalableParser, _parse_amount
-
+from ofxstatement_scalable.plugin import (
+    ScalablePlugin,
+    ScalableParser,
+    _parse_amount,
+    _txn_type,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for _parse_amount (English locale: comma = thousands, dot = decimal)
 # ---------------------------------------------------------------------------
+
+
+class TestTxnType:
+    def test_buy(self):
+        assert _txn_type("Buy of a financial instrument") == "DEBIT"
+
+    def test_sell(self):
+        assert _txn_type("Sell of a financial instrument") == "CREDIT"
+
+    def test_credit_transfer(self):
+        assert _txn_type("Credit transfer") == "XFER"
+
+    def test_direct_debit(self):
+        assert _txn_type("Direct debit") == "DIRECTDEBIT"
+
+    def test_withdrawal(self):
+        assert _txn_type("Withdrawal from cash account") == "XFER"
+
+    def test_received_interest(self):
+        assert _txn_type("Received interest") == "INT"
+
+    def test_trade_fee(self):
+        assert _txn_type("Trade fee") == "SRVCHG"
+
+    def test_vorabpauschale(self):
+        assert _txn_type("Vorabpauschale") == "DEBIT"
+
+    def test_case_insensitive(self):
+        assert _txn_type("BUY OF A FINANCIAL INSTRUMENT") == "DEBIT"
+
+    def test_unknown_returns_other(self):
+        assert _txn_type("Something entirely new") == "OTHER"
+
+    # German entries
+    def test_de_buy(self):
+        assert _txn_type("Kauf eines Finanzinstruments") == "DEBIT"
+
+    def test_de_withdrawal(self):
+        assert _txn_type("Abbuchung vom Cashkonto") == "XFER"
+
+    def test_de_direct_debit(self):
+        assert _txn_type("Lastschrift") == "DIRECTDEBIT"
+
+    def test_de_interest(self):
+        assert _txn_type("Zinsgutschrift") == "INT"
+
 
 class TestParseAmount:
     def test_zero(self):
@@ -186,13 +236,13 @@ class TestTransactionParsing:
         assert self.lines[3].amount == Decimal("-13864.86")
 
     def test_simple_debit_type(self):
-        assert self.lines[3].trntype == "DEBIT"
+        assert self.lines[3].trntype == "XFER"
 
     def test_credit_amount(self):
         assert self.lines[4].amount == Decimal("602.96")
 
     def test_credit_type(self):
-        assert self.lines[4].trntype == "CREDIT"
+        assert self.lines[4].trntype == "DIRECTDEBIT"
 
     def test_multiline_memo_includes_continuation(self):
         # First "Buy" entry: memo should include the instrument detail line
@@ -222,9 +272,10 @@ class TestEmptyStatement:
         # Remove the transaction lines
         lines = text.split("\n")
         cleaned = [
-            l for l in lines
+            line
+            for line in lines
             if not (
-                _is_tx_line(l) or l.strip().startswith(("6.25", "0.67", "0.24"))
+                _is_tx_line(line) or line.strip().startswith(("6.25", "0.67", "0.24"))
             )
         ]
         parser = _make_parser("\n".join(cleaned))
@@ -233,6 +284,7 @@ class TestEmptyStatement:
 
 def _is_tx_line(line: str) -> bool:
     import re
+
     return bool(re.match(r"^\d{2}\.\d{2}\.\d{4}\s+\d{2}\.\d{2}\.\d{4}", line))
 
 
@@ -278,10 +330,10 @@ class TestGermanStatement:
         assert "IE000HY30YW6" in self.lines[0].memo
 
     def test_debit_type(self):
-        assert self.lines[1].trntype == "DEBIT"
+        assert self.lines[1].trntype == "XFER"  # Abbuchung vom Cashkonto
 
     def test_credit_type(self):
-        assert self.lines[2].trntype == "CREDIT"
+        assert self.lines[2].trntype == "DIRECTDEBIT"  # Lastschrift
 
 
 class TestDocumentTypeDetection:
@@ -297,6 +349,35 @@ class TestDocumentTypeDetection:
     def test_cash_statement_accepted(self):
         # Should not raise — the baseline SAMPLE_TEXT contains "Cash Account Statement"
         _make_parser(SAMPLE_TEXT)
+
+
+class TestAccountType:
+    def test_account_type_is_checking(self):
+        stmt = _make_parser(SAMPLE_TEXT).statement
+        assert stmt.account_type == "CHECKING"
+
+
+class TestPayeeField:
+    def setup_method(self):
+        self.lines = _make_parser(SAMPLE_TEXT).statement.lines
+
+    def test_payee_set_on_simple_transaction(self):
+        assert self.lines[3].payee == "Withdrawal from cash account"
+
+    def test_payee_set_on_buy(self):
+        assert self.lines[0].payee == "Buy of a financial instrument"
+
+    def test_payee_does_not_include_continuation(self):
+        # Payee is just the description; continuation goes in memo
+        assert "IE000HY30YW6" not in self.lines[0].payee
+
+
+class TestPdfOpenError:
+    def test_non_pdf_raises_parse_error(self, tmp_path):
+        f = tmp_path / "statement.pdf"
+        f.write_text("This is not a PDF file\n", encoding="utf-8")
+        with pytest.raises(ParseError, match="could not be opened as a PDF"):
+            ScalableParser(str(f)).parse()
 
 
 class TestPlugin:
