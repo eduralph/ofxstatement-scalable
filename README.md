@@ -41,47 +41,54 @@ The parser reads the following fields from the PDF:
 ## Transaction types
 
 Transactions are classified by matching the description text against a
-built-in type map.  The following OFX types are recognised:
+built-in type map.  Entries are either **tested** (confirmed against real
+Scalable Capital statements, marked ★ in source) or **best-effort** (added
+for completeness but not yet verified, marked ○ in source).
+
+### Tested (confirmed against real statements)
 
 | Description prefix | OFX type | Category |
 |--------------------|----------|----------|
-| Buy of a financial instrument | `DEBIT` | Securities purchase |
-| Sell of a financial instrument | `CREDIT` | Securities sale |
-| Savings plan execution | `DEBIT` | Savings plan buy |
+| Buy of a financial instrument | `DEBIT` | ETF / fund purchase |
 | Credit transfer | `XFER` | Incoming bank transfer |
-| Direct debit | `DIRECTDEBIT` | SEPA direct debit |
+| Direct debit | `DIRECTDEBIT` | Savings-plan SEPA pull |
 | Withdrawal from cash account | `XFER` | Cash-out to linked bank |
+| Received interest | `INT` | PRIME+ / money-market interest |
+| Trade fee | `SRVCHG` | Per-trade brokerage fee |
+| Vorabpauschale | `DEBIT` | Advance lump-sum fund tax (DE) |
+
+### Best-effort (not yet verified — help wanted)
+
+| Description prefix | OFX type | Category |
+|--------------------|----------|----------|
+| Sell of a financial instrument | `CREDIT` | ETF / fund sale |
+| Savings plan execution | `DEBIT` | Savings plan buy |
 | Deposit to cash account | `XFER` | Cash-in from linked bank |
-| Received interest | `INT` | Interest payment |
 | Dividend | `DIV` | Dividend payment |
-| Trade fee | `SRVCHG` | Brokerage fee |
+| Advance lump-sum tax | `DEBIT` | Vorabpauschale (EN) |
 | Account fee | `SRVCHG` | Account maintenance fee |
-| Vorabpauschale / Advance lump-sum tax | `DEBIT` | Advance fund tax |
 | Withholding tax | `DEBIT` | Capital gains tax |
+| Tax refund | `CREDIT` | Tax correction / refund |
+| Tax correction | `CREDIT` | Tax adjustment |
+| Tax optimisation | `CREDIT` | Tax loss harvesting refund |
 | Kapitalertragsteuer | `DEBIT` | Capital gains tax (DE) |
 | Solidaritätszuschlag | `DEBIT` | Solidarity surcharge (DE) |
 | Kirchensteuer | `DEBIT` | Church tax (DE) |
-| Tax refund / Steuererstattung | `CREDIT` | Tax correction |
-| Bonus / Prämie | `CREDIT` | Promotional credit |
+| Bonus | `CREDIT` | Sign-up / referral bonus |
 
-German equivalents (Kauf, Verkauf, Lastschrift, Abbuchung, Zinsen, etc.)
-are also recognised.  See `TXN_TYPE_MAP` in `plugin.py` for the full list.
+German equivalents are also recognised (Kauf, Verkauf, Lastschrift,
+Abbuchung, Zinsen, Sparplanausführung, Steuererstattung, Prämie, etc.).
+See `TXN_TYPE_MAP` in `plugin.py` for the full list.
 
 Unrecognised descriptions are logged as a `WARNING` with the prefix
 `"Unknown transaction type"` and mapped to `OTHER`.
-
-
-## Caveats
-
-Entries marked ★ in the source code are confirmed against real statements.
-Entries marked ○ are best-effort additions for descriptions not yet observed
-in available test data.
 
 **If you use Scalable Capital** and encounter a transaction that is
 misclassified or falls back to `OTHER`, please
 [open an issue](https://github.com/eduralph/ofxstatement-scalable/issues)
 and include the description text from your statement (amounts and dates
-can be redacted).  This helps improve the type map for everyone.
+can be redacted).  This helps promote best-effort entries to tested and
+improve the type map for everyone.
 
 
 ## Installation
