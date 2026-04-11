@@ -344,6 +344,35 @@ class TestDocumentTypeDetection:
         _make_parser(SAMPLE_TEXT)
 
 
+class TestAccountType:
+    def test_account_type_is_checking(self):
+        stmt = _make_parser(SAMPLE_TEXT).statement
+        assert stmt.account_type == "CHECKING"
+
+
+class TestPayeeField:
+    def setup_method(self):
+        self.lines = _make_parser(SAMPLE_TEXT).statement.lines
+
+    def test_payee_set_on_simple_transaction(self):
+        assert self.lines[3].payee == "Withdrawal from cash account"
+
+    def test_payee_set_on_buy(self):
+        assert self.lines[0].payee == "Buy of a financial instrument"
+
+    def test_payee_does_not_include_continuation(self):
+        # Payee is just the description; continuation goes in memo
+        assert "IE000HY30YW6" not in self.lines[0].payee
+
+
+class TestPdfOpenError:
+    def test_non_pdf_raises_parse_error(self, tmp_path):
+        f = tmp_path / "statement.pdf"
+        f.write_text("This is not a PDF file\n", encoding="utf-8")
+        with pytest.raises(ParseError, match="could not be opened as a PDF"):
+            ScalableParser(str(f)).parse()
+
+
 class TestPlugin:
     def test_get_parser(self):
         plugin = ScalablePlugin(None, {})
