@@ -64,7 +64,7 @@ _TABLE_END_RE = re.compile(
     r"|No account movements"
     r"|Keine Kontobewegungen"
     r"|If you use Credit"
-    r"|Wenn Sie Kredit nutzen)"        # DE equivalent
+    r"|Wenn Sie Kredit nutzen)"  # DE equivalent
 )
 
 # --- structural lines to skip inside the table area -------------------------
@@ -83,17 +83,17 @@ _STRUCTURAL_RE = re.compile(
     r"|Dirk Franzmeyer"
     r"|Patrick Olson"
     r"|Cash Account Statement"
-    r"|Kontoauszug"                      # DE: page title
+    r"|Kontoauszug"  # DE: page title
     r"|Period \d{2}\.\d{2}"
-    r"|Zeitraum \d{2}\.\d{2}"            # DE: period header
+    r"|Zeitraum \d{2}\.\d{2}"  # DE: period header
     r"|Document no\."
-    r"|Dokument-?Nr\.?"                   # DE: document number
+    r"|Dokument-?Nr\.?"  # DE: document number
     r"|Clearing account"
-    r"|Verrechnungskonto"                 # DE: clearing account label
+    r"|Verrechnungskonto"  # DE: clearing account label
     r"|Balance on \d{2}\.\d{2}"
-    r"|Kontostand am \d{2}\.\d{2}"        # DE: balance label
-    r"|Saldo am \d{2}\.\d{2}"            # DE: balance label (alt)
-    r"|\d+ / \d+$"                       # page number
+    r"|Kontostand am \d{2}\.\d{2}"  # DE: balance label
+    r"|Saldo am \d{2}\.\d{2}"  # DE: balance label (alt)
+    r"|\d+ / \d+$"  # page number
     r")"
 )
 
@@ -109,51 +109,51 @@ _STRUCTURAL_RE = re.compile(
 # ---------------------------------------------------------------------------
 TXN_TYPE_MAP: List[Tuple[str, str]] = [
     # ── Securities ─────────────────────────────────────────────────────────
-    ("Buy of a financial instrument", "DEBIT"),         # ★ ETF / fund purchase
-    ("Sell of a financial instrument", "CREDIT"),       # ○ ETF / fund sale
-    ("Savings plan execution", "DEBIT"),                # ○ savings plan buy
-    ("Kauf eines Finanzinstruments", "DEBIT"),          # ○ DE: purchase
-    ("Verkauf eines Finanzinstruments", "CREDIT"),      # ○ DE: sale
-    ("Sparplanausführung", "DEBIT"),                    # ○ DE: savings plan execution
+    ("Buy of a financial instrument", "DEBIT"),  # ★ ETF / fund purchase
+    ("Sell of a financial instrument", "CREDIT"),  # ○ ETF / fund sale
+    ("Savings plan execution", "DEBIT"),  # ○ savings plan buy
+    ("Kauf eines Finanzinstruments", "DEBIT"),  # ○ DE: purchase
+    ("Verkauf eines Finanzinstruments", "CREDIT"),  # ○ DE: sale
+    ("Sparplanausführung", "DEBIT"),  # ○ DE: savings plan execution
     # ── Cash account movements ─────────────────────────────────────────────
-    ("Credit transfer", "XFER"),                        # ★ incoming bank transfer
-    ("Direct debit", "DIRECTDEBIT"),                    # ★ savings-plan SEPA pull
-    ("Withdrawal from cash account", "XFER"),           # ★ cash-out to linked bank
-    ("Deposit to cash account", "XFER"),                # ○ cash-in from linked bank
-    ("Überweisung", "XFER"),                            # ○ DE: bank transfer
-    ("Gutschrift", "XFER"),                             # ○ DE: incoming credit
-    ("Lastschrift", "DIRECTDEBIT"),                     # ○ DE: SEPA direct debit
-    ("Abbuchung", "XFER"),                              # ○ DE: debit / withdrawal
-    ("Auszahlung", "XFER"),                             # ○ DE: withdrawal
-    ("Einzahlung", "XFER"),                             # ○ DE: deposit
+    ("Credit transfer", "XFER"),  # ★ incoming bank transfer
+    ("Direct debit", "DIRECTDEBIT"),  # ★ savings-plan SEPA pull
+    ("Withdrawal from cash account", "XFER"),  # ★ cash-out to linked bank
+    ("Deposit to cash account", "XFER"),  # ○ cash-in from linked bank
+    ("Überweisung", "XFER"),  # ○ DE: bank transfer
+    ("Gutschrift", "XFER"),  # ○ DE: incoming credit
+    ("Lastschrift", "DIRECTDEBIT"),  # ○ DE: SEPA direct debit
+    ("Abbuchung", "XFER"),  # ○ DE: debit / withdrawal
+    ("Auszahlung", "XFER"),  # ○ DE: withdrawal
+    ("Einzahlung", "XFER"),  # ○ DE: deposit
     # ── Income ─────────────────────────────────────────────────────────────
-    ("Received interest", "INT"),                       # ★ PRIME+ / money-market interest
-    ("Dividend", "DIV"),                                # ○ dividend payment
-    ("Zinsgutschrift", "INT"),                          # ○ DE: interest credit
-    ("Zinsen", "INT"),                                  # ○ DE: interest
-    ("Dividende", "DIV"),                               # ○ DE: dividend
+    ("Received interest", "INT"),  # ★ PRIME+ / money-market interest
+    ("Dividend", "DIV"),  # ○ dividend payment
+    ("Zinsgutschrift", "INT"),  # ○ DE: interest credit
+    ("Zinsen", "INT"),  # ○ DE: interest
+    ("Dividende", "DIV"),  # ○ DE: dividend
     # ── Fees and taxes ─────────────────────────────────────────────────────
-    ("Trade fee", "SRVCHG"),                            # ★ per-trade brokerage fee
-    ("Vorabpauschale", "DEBIT"),                        # ★ DE advance lump-sum fund tax
-    ("Advance lump-sum tax", "DEBIT"),                  # ○ EN: Vorabpauschale equivalent
-    ("Account fee", "SRVCHG"),                          # ○ account maintenance fee
-    ("Handelsgebühr", "SRVCHG"),                        # ○ DE: trading fee
-    ("Transaktionsgebühr", "SRVCHG"),                   # ○ DE: transaction fee
-    ("Kontoführungsgebühr", "SRVCHG"),                  # ○ DE: account fee
+    ("Trade fee", "SRVCHG"),  # ★ per-trade brokerage fee
+    ("Vorabpauschale", "DEBIT"),  # ★ DE advance lump-sum fund tax
+    ("Advance lump-sum tax", "DEBIT"),  # ○ EN: Vorabpauschale equivalent
+    ("Account fee", "SRVCHG"),  # ○ account maintenance fee
+    ("Handelsgebühr", "SRVCHG"),  # ○ DE: trading fee
+    ("Transaktionsgebühr", "SRVCHG"),  # ○ DE: transaction fee
+    ("Kontoführungsgebühr", "SRVCHG"),  # ○ DE: account fee
     # ── Tax withholding and adjustments ────────────────────────────────────
-    ("Withholding tax", "DEBIT"),                       # ○ capital gains tax deduction
-    ("Tax refund", "CREDIT"),                           # ○ tax correction / refund
-    ("Tax correction", "CREDIT"),                       # ○ tax adjustment
-    ("Tax optimisation", "CREDIT"),                     # ○ tax loss harvesting refund
-    ("Kapitalertragsteuer", "DEBIT"),                   # ○ DE: capital gains tax
-    ("Solidaritätszuschlag", "DEBIT"),                  # ○ DE: solidarity surcharge
-    ("Kirchensteuer", "DEBIT"),                         # ○ DE: church tax
-    ("Steuererstattung", "CREDIT"),                     # ○ DE: tax refund
-    ("Steueroptimierung", "CREDIT"),                    # ○ DE: tax optimisation
-    ("Steuerkorrektor", "CREDIT"),                      # ○ DE: tax correction
+    ("Withholding tax", "DEBIT"),  # ○ capital gains tax deduction
+    ("Tax refund", "CREDIT"),  # ○ tax correction / refund
+    ("Tax correction", "CREDIT"),  # ○ tax adjustment
+    ("Tax optimisation", "CREDIT"),  # ○ tax loss harvesting refund
+    ("Kapitalertragsteuer", "DEBIT"),  # ○ DE: capital gains tax
+    ("Solidaritätszuschlag", "DEBIT"),  # ○ DE: solidarity surcharge
+    ("Kirchensteuer", "DEBIT"),  # ○ DE: church tax
+    ("Steuererstattung", "CREDIT"),  # ○ DE: tax refund
+    ("Steueroptimierung", "CREDIT"),  # ○ DE: tax optimisation
+    ("Steuerkorrektor", "CREDIT"),  # ○ DE: tax correction
     # ── Bonus / promotional ───────────────────────────────────────────────
-    ("Bonus", "CREDIT"),                                # ○ sign-up / referral bonus
-    ("Prämie", "CREDIT"),                               # ○ DE: promotional credit
+    ("Bonus", "CREDIT"),  # ○ sign-up / referral bonus
+    ("Prämie", "CREDIT"),  # ○ DE: promotional credit
 ]
 
 

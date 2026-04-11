@@ -23,12 +23,17 @@ import pytest
 
 from ofxstatement.exceptions import ParseError
 
-from ofxstatement_scalable.plugin import ScalablePlugin, ScalableParser, _parse_amount, _txn_type
-
+from ofxstatement_scalable.plugin import (
+    ScalablePlugin,
+    ScalableParser,
+    _parse_amount,
+    _txn_type,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for _parse_amount (English locale: comma = thousands, dot = decimal)
 # ---------------------------------------------------------------------------
+
 
 class TestTxnType:
     def test_buy(self):
@@ -267,10 +272,9 @@ class TestEmptyStatement:
         # Remove the transaction lines
         lines = text.split("\n")
         cleaned = [
-            l for l in lines
-            if not (
-                _is_tx_line(l) or l.strip().startswith(("6.25", "0.67", "0.24"))
-            )
+            l
+            for l in lines
+            if not (_is_tx_line(l) or l.strip().startswith(("6.25", "0.67", "0.24")))
         ]
         parser = _make_parser("\n".join(cleaned))
         assert parser.statement.lines == []
@@ -278,6 +282,7 @@ class TestEmptyStatement:
 
 def _is_tx_line(line: str) -> bool:
     import re
+
     return bool(re.match(r"^\d{2}\.\d{2}\.\d{4}\s+\d{2}\.\d{2}\.\d{4}", line))
 
 
