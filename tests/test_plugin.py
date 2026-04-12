@@ -386,3 +386,141 @@ class TestPlugin:
         parser = plugin.get_parser("some.pdf")
         assert isinstance(parser, ScalableParser)
         assert parser.filename == "some.pdf"
+
+
+# ---------------------------------------------------------------------------
+# Extended German-language coverage
+# ---------------------------------------------------------------------------
+
+# Two-page German statement with page headers/footers between pages and the
+# alternate "Saldo am" balance label.
+GERMAN_MULTIPAGE_TEXT = """\
+Scalable Capital Bank GmbH • Seitzstraße 8e • 80538 München • Deutschland
+Kontoauszug
+Zeitraum 01.11.2025 - 30.11.2025
+Verrechnungskonto DE19120700700756225027 (DEUTDEFFXXX)
+Saldo am 01.11.2025 2,616.34 EUR
+Saldo am 30.11.2025 15,067.82 EUR
+Buchung Wertstellung Beschreibung Betrag
+01.11.2025 01.11.2025 Gutschrift +2,000.00 EUR
+03.11.2025 05.11.2025 Kauf eines Finanzinstruments -200.00 EUR
+6.13 Stk. Xtrackers S&P 500 Swap II (Acc) (IE000HY30YW6)
+Scalable Capital Bank GmbH HRB 217778 Managing Directors: Supervisory Board: Page
+Seitzstraße 8e Registry Court: Munich Local Court Florian Prucker, Martin Krebs, Patrick Olson (Chairman)
+80538 München Sales tax ID: DE300434774 Dirk Franzmeyer 1 / 2
+Kontoauszug
+Zeitraum 01.11.2025 - 30.11.2025
+Buchung Wertstellung Beschreibung Betrag
+03.11.2025 05.11.2025 Sparplanausführung -75.00 EUR
+1.14 Stk. Xtrackers MSCI Emerging Markets (Acc) (IE00BTJRMP35)
+26.11.2025 27.11.2025 Lastschrift +601.48 EUR
+Scalable Capital Bank GmbH HRB 217778 Managing Directors: Supervisory Board: Page
+Seitzstraße 8e Registry Court: Munich Local Court Florian Prucker, Martin Krebs, Patrick Olson (Chairman)
+80538 München Sales tax ID: DE300434774 Dirk Franzmeyer 2 / 2
+Kontoauszug
+Zeitraum 01.11.2025 - 30.11.2025
+Verteilung Ihrer Einlagen
+zum Wertstellungsdatum 30.11.2025
+"""
+
+# Empty German statement (no account movements during period)
+GERMAN_EMPTY_TEXT = """\
+Scalable Capital Bank GmbH • Seitzstraße 8e • 80538 München • Deutschland
+Kontoauszug
+Zeitraum 01.10.2025 - 31.10.2025
+Verrechnungskonto DE19120700700756225027 (DEUTDEFFXXX)
+Kontostand am 01.10.2025 1,000.00 EUR
+Kontostand am 31.10.2025 1,000.00 EUR
+Buchung Wertstellung Beschreibung Betrag
+Keine Kontobewegungen in diesem Zeitraum
+"""
+
+
+class TestGermanMultiPage:
+    def setup_method(self):
+        self.stmt = _make_parser(GERMAN_MULTIPAGE_TEXT).statement
+        self.lines = self.stmt.lines
+
+    def test_saldo_am_balance_label(self):
+        # Verifies the alternate DE balance label "Saldo am" is recognised
+        assert self.stmt.start_balance == Decimal("2616.34")
+        assert self.stmt.end_balance == Decimal("15067.82")
+
+    def test_transaction_count(self):
+        assert len(self.lines) == 4
+
+    def test_first_page_last_tx_has_continuation(self):
+        # Multi-line German memo survives the page break
+        assert "IE000HY30YW6" in self.lines[1].memo
+
+    def test_second_page_first_tx(self):
+        # Picked up after re-entering the table on page 2
+        assert "IE00BTJRMP35" in self.lines[2].memo
+
+    def test_second_page_last_tx(self):
+        assert self.lines[3].amount == Decimal("601.48")
+        assert self.lines[3].trntype == "DIRECTDEBIT"
+
+    def test_sparplan_type(self):
+        assert self.lines[2].trntype == "DEBIT"
+
+
+class TestGermanEmptyStatement:
+    def test_no_transactions(self):
+        stmt = _make_parser(GERMAN_EMPTY_TEXT).statement
+        assert stmt.lines == []
+        assert stmt.start_balance == Decimal("1000.00")
+        assert stmt.end_balance == Decimal("1000.00")
+
+
+# ---------------------------------------------------------------------------
+# Sanity-check warnings: regex drift and balance mismatch
+# ---------------------------------------------------------------------------
+
+
+BALANCED_TEXT = """\
+Scalable Capital Bank GmbH
+Cash Account Statement
+Period 01.12.2025 - 31.12.2025
+Clearing account DE19120700700756225027 (DEUTDEFFXXX)
+Balance on 01.12.2025 1,000.00 EUR
+Balance on 31.12.2025 950.00 EUR
+Booking Value date Description Amount
+05.12.2025 05.12.2025 Trade fee -50.00 EUR
+"""
+
+
+class TestSanityCheck:
+    def test_balance_ok_no_warning(self, caplog):
+        with caplog.at_level("WARNING", logger="ofxstatement_scalable.plugin"):
+            _make_parser(BALANCED_TEXT)
+        assert not any("Balance check failed" in r.message for r in caplog.records)
+
+    def test_balance_mismatch_warns(self, caplog):
+        text = BALANCED_TEXT.replace(
+            "Balance on 31.12.2025 950.00 EUR",
+            "Balance on 31.12.2025 999.99 EUR",
+        )
+        with caplog.at_level("WARNING", logger="ofxstatement_scalable.plugin"):
+            _make_parser(text)
+        assert any("Balance check failed" in r.message for r in caplog.records)
+
+    def test_regex_drift_warns(self, caplog):
+        # Simulate drift: amount format changed from "-50.00 EUR" to "EUR -50,00"
+        # (comma decimal). _TX_RE fails; _CANDIDATE_TX_RE still matches
+        # because both dates and EUR are present.
+        drifted = """\
+Scalable Capital Bank GmbH
+Cash Account Statement
+Period 01.12.2025 - 31.12.2025
+Clearing account DE19120700700756225027 (DEUTDEFFXXX)
+Balance on 01.12.2025 100.00 EUR
+Balance on 31.12.2025 100.00 EUR
+Booking Value date Description Amount
+01.12.2025 03.12.2025 Trade fee EUR -50,00
+02.12.2025 04.12.2025 Trade fee EUR -50,00
+"""
+        with caplog.at_level("WARNING", logger="ofxstatement_scalable.plugin"):
+            stmt = _make_parser(drifted).statement
+        assert len(stmt.lines) == 0
+        assert any("_TX_RE may be out of date" in r.message for r in caplog.records)

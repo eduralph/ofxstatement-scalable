@@ -49,6 +49,12 @@ _TX_RE = re.compile(
     r"^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})\s+(.+?)\s+([+-]?[\d,]+\.\d{2})\s+EUR\s*$"
 )
 
+# Loose "looks like a transaction row" pattern used only to detect silent
+# breakage of _TX_RE: two dates on a line that mentions EUR somewhere.  If
+# _TX_RE matched nothing but this does, the strict regex has drifted and
+# probably needs updating (amount format, trailing tokens, etc.).
+_CANDIDATE_TX_RE = re.compile(r"^\d{2}\.\d{2}\.\d{4}\s+\d{2}\.\d{2}\.\d{4}\b.*\bEUR\b")
+
 # --- table header (EN / DE) -------------------------------------------------
 # When seen, we enter (or re-enter) the transaction table.
 _TABLE_HEADER_RE = re.compile(
@@ -206,6 +212,7 @@ class ScalableParser(StatementParser[str]):
         self.statement = Statement()
         self.statement.currency = "EUR"
         self.statement.account_type = "CHECKING"
+        self._unmatched_candidates: List[str] = []
 
         try:
             pdf_cm = pdfplumber.open(self.filename)
@@ -244,6 +251,7 @@ class ScalableParser(StatementParser[str]):
 
         self._parse_header(full_text)
         self._parse_transactions(full_text)
+        self._sanity_check()
 
         logger.info("Done: %d transaction(s)", len(self.statement.lines))
         return self.statement
@@ -340,6 +348,8 @@ class ScalableParser(StatementParser[str]):
                 if _STRUCTURAL_RE.match(line):
                     logger.debug("Skipped structural line: %r", line[:60])
                     continue
+                if _CANDIDATE_TX_RE.match(line):
+                    self._unmatched_candidates.append(line)
                 stripped = line.strip()
                 if stripped:
                     pending["continuation"].append(stripped)
@@ -351,6 +361,8 @@ class ScalableParser(StatementParser[str]):
             else:
                 stripped = line.strip()
                 if stripped and not _STRUCTURAL_RE.match(line):
+                    if _CANDIDATE_TX_RE.match(line):
+                        self._unmatched_candidates.append(line)
                     logger.debug(
                         "Skipped unrecognised line in table (no pending txn): %r",
                         line[:80],
@@ -400,6 +412,48 @@ class ScalableParser(StatementParser[str]):
             amount,
         )
         return line
+
+    def _sanity_check(self) -> None:
+        """Warn about silent-failure modes: regex drift and balance mismatch."""
+        stmt = self.statement
+
+        candidates = getattr(self, "_unmatched_candidates", [])
+        if not stmt.lines and candidates:
+            sample = candidates[:3]
+            logger.warning(
+                "Parsed 0 transactions but found %d line(s) that look like "
+                "transaction rows — _TX_RE may be out of date. "
+                "Sample unmatched line(s): %s",
+                len(candidates),
+                " | ".join(repr(s[:100]) for s in sample),
+            )
+        elif candidates:
+            logger.warning(
+                "%d line(s) look like transaction rows but did not match "
+                "_TX_RE — check for format drift. Sample: %r",
+                len(candidates),
+                candidates[0][:100],
+            )
+
+        if stmt.start_balance is not None and stmt.end_balance is not None:
+            total = sum(
+                (line.amount for line in stmt.lines if line.amount is not None),
+                Decimal("0"),
+            )
+            expected_end = stmt.start_balance + total
+            diff = stmt.end_balance - expected_end
+            if abs(diff) > Decimal("0.005"):
+                logger.warning(
+                    "Balance check failed: start=%s + sum(%d txns)=%s = %s, "
+                    "but parsed end=%s (diff=%s). Likely causes: a missing "
+                    "transaction, a misread amount, or wrong start/end balances.",
+                    stmt.start_balance,
+                    len(stmt.lines),
+                    total,
+                    expected_end,
+                    stmt.end_balance,
+                    diff,
+                )
 
     def split_records(self) -> Iterator[str]:
         return iter([])
